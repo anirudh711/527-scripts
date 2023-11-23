@@ -1,14 +1,49 @@
 import requests
-import datetime
+import re
 
-# Please replace here with your token
-GITHUB_TOKEN = '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'
+GITHUB_TOKEN = "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"
+
+
+def identify_commits_with_deletions(commits):
+    deletions_list = []
+
+    for commit in commits:
+        commit_url = commit["url"]
+        committer_email = commit["commit"]["author"]["email"]
+
+        # Get commit details
+        commit_details_response = requests.get(
+            commit_url, headers={"Authorization": f"token {GITHUB_TOKEN}"}
+        )
+        commit_details = commit_details_response.json()
+
+        # Checking if there are only deletions and no or some additions
+        total_changes = commit_details["stats"]["total"]
+        deletions = commit_details["stats"]["deletions"]
+        additions = commit_details["stats"]["additions"]
+        commit_files = commit_details["files"]
+        if deletions > 0 and additions >= 0:
+            # check for deletions in files
+            patch_files = {}
+            files_to_check = ["pr-data.csv", "gr-data.csv"]
+            for file in commit_files:
+
+                pattern = r"@@ -\d+,\d+ \+\d+,\d+ @@"
+                patch_line = re.findall(pattern, file["patch"])
+                if file["filename"] in files_to_check:
+                    patch_files[file["filename"]] = patch_line
+                    deletions_list.append(
+                        (committer_email, deletions, commit_url, patch_files)
+                    )
+
+    return deletions_list
+
 
 def get_commits(repo_owner, repo_name, since_date, until_date):
-    api_url = f'https://api.github.com/repos/{repo_owner}/{repo_name}/commits'
-    params = {'since': since_date, 'until': until_date}
-    
-    headers = {'Authorization': f'token {GITHUB_TOKEN}'}
+    api_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/commits"
+    params = {"since": since_date, "until": until_date}
+
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
 
     response = requests.get(api_url, headers=headers, params=params)
 
@@ -18,36 +53,19 @@ def get_commits(repo_owner, repo_name, since_date, until_date):
     else:
         return []
 
-def identify_commits_with_deletions(commits):
-    deletions_list = []
-
-    for commit in commits:
-        commit_url = commit['url']
-        committer_email = commit['commit']['author']['email']
-
-        # Get commit details
-        commit_details_response = requests.get(commit_url, headers={'Authorization': f'token {GITHUB_TOKEN}'})
-        commit_details = commit_details_response.json()
-
-        # Checking if there are only deletions and no or some additions
-        total_changes = commit_details['stats']['total']
-        deletions = commit_details['stats']['deletions']
-        additions = commit_details['stats']['additions']
-
-        if deletions>0 and additions>=0:
-            deletions_list.append((committer_email, deletions, commit_url))
-
-    return deletions_list
 
 def print_deletions_list(deletions_list):
-    for committer_email, deleted_lines, commit_url in deletions_list:
-        print(f"Committer Email: {committer_email}, Deleted Lines: {deleted_lines}, Commit Link: {commit_url}")
+    for committer_email, deleted_lines, commit_url, patch_line in deletions_list:
+        print(
+            f"Committer Email: {committer_email}, Commit URL: {commit_url}, Deleted Lines: {patch_line}"
+        )
+
 
 if __name__ == "__main__":
-    repo_owner = 'TestingResearchIllinois'
-    repo_name = 'idoft'
-    since_date = '2022-01-01T00:00:00Z'  # Replace with your start date
-    until_date = '2023-10-31T23:59:59Z'  # Replace with your end date
+    repo_owner = "TestingResearchIllinois"
+    repo_name = "idoft"
+    since_date = "2022-01-01T00:00:00Z"
+    until_date = "2023-10-31T23:59:59Z"
 
     commits = get_commits(repo_owner, repo_name, since_date, until_date)
     deletions_list = identify_commits_with_deletions(commits)
