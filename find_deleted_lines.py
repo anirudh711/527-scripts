@@ -1,8 +1,30 @@
 import requests
 import re
+import collections
 
-GITHUB_TOKEN = "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"
+GITHUB_TOKEN = "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"
 
+
+def find_deleted_lines(patch):
+    patch_lines_all = patch.split('\n')
+
+    patch_lines=patch_lines_all[1:]
+
+    patch_lines.pop()
+    queue=collections.deque()
+    dump=[]
+    for p in patch_lines:
+        if p[0]=='-':
+            queue.append(p[1:])
+        elif p[0]=='+':
+            if len(queue):
+                queue.popleft()
+        else:
+            if len(queue):
+                while len(queue)>0:
+                    q=queue.popleft()
+                    dump.append(q)
+    return dump
 
 def identify_commits_with_deletions(commits):
     deletions_list = []
@@ -28,13 +50,13 @@ def identify_commits_with_deletions(commits):
             files_to_check = ["pr-data.csv", "gr-data.csv"]
             for file in commit_files:
 
-                pattern = r"@@ -\d+,\d+ \+\d+,\d+ @@"
-                patch_line = re.findall(pattern, file["patch"])
+              
                 if file["filename"] in files_to_check:
-                    patch_files[file["filename"]] = patch_line
-                    deletions_list.append(
-                        (committer_email, deletions, commit_url, patch_files)
-                    )
+                    deleted_lines = find_deleted_lines(file["patch"])
+                    if len(deleted_lines):
+                        deletions_list.append(
+                                (committer_email, deletions, commit_url, deleted_lines)
+                            )
 
     return deletions_list
 
@@ -51,7 +73,7 @@ def get_commits(repo_owner, repo_name, since_date, until_date):
         commits_data = response.json()
         return commits_data
     else:
-        return []
+        return response 
 
 
 def print_deletions_list(deletions_list):
