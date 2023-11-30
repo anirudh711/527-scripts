@@ -2,7 +2,7 @@ import requests
 import re
 import collections
 
-GITHUB_TOKEN = "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"
+GITHUB_TOKEN = "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"
 
 
 def find_deleted_lines(patch):
@@ -31,6 +31,8 @@ def identify_commits_with_deletions(commits):
 
     for commit in commits:
         commit_url = commit["url"]
+        commit_sha=commit["sha"]
+        print(commit_sha)
         committer_email = commit["commit"]["author"]["email"]
 
         # Get commit details
@@ -55,40 +57,46 @@ def identify_commits_with_deletions(commits):
                     deleted_lines = find_deleted_lines(file["patch"])
                     if len(deleted_lines):
                         deletions_list.append(
-                                (committer_email, deletions, commit_url, deleted_lines)
+                                (committer_email, commit_sha, deleted_lines)
                             )
 
     return deletions_list
 
 
-def get_commits(repo_owner, repo_name, since_date, until_date):
-    api_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/commits"
-    params = {"since": since_date, "until": until_date}
+def get_commits(repo_owner, repo_name, since_date):
+    flag=True
+    commits_data=[]
+    page=1
+    while flag:
+        api_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/commits?since={since_date}&per_page=100&page={page}"
 
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+        headers = {"Authorization": f"token {GITHUB_TOKEN}","Accept": "application/vnd.github.v3+json"}
 
-    response = requests.get(api_url, headers=headers, params=params)
-
-    if response.status_code == 200:
-        commits_data = response.json()
-        return commits_data
-    else:
-        return response 
-
-
+        response = requests.get(api_url, headers=headers)
+        if response.status_code == 200:
+            d = response.json()
+            if len(d)==0:
+                flag=False
+            for data in d:
+                commits_data.append(data)
+            page+=1
+            
+        else:
+            flag=False
+            return response 
+    return commits_data
 def print_deletions_list(deletions_list):
-    for committer_email, deleted_lines, commit_url, patch_line in deletions_list:
+    for committer_email, commit_sha, patch_line in deletions_list:
         print(
-            f"Committer Email: {committer_email}, Commit URL: {commit_url}, Deleted Lines: {patch_line}"
+            f"Committer Email: {committer_email}, Deleted Lines: {patch_line}, Commit URL: {commit_sha},"
         )
 
 
 if __name__ == "__main__":
     repo_owner = "TestingResearchIllinois"
     repo_name = "idoft"
-    since_date = "2022-01-01T00:00:00Z"
-    until_date = "2023-10-31T23:59:59Z"
+    since_date = "2023-08-15T00:00:00Z"
 
-    commits = get_commits(repo_owner, repo_name, since_date, until_date)
+    commits = get_commits(repo_owner, repo_name, since_date)
     deletions_list = identify_commits_with_deletions(commits)
     print_deletions_list(deletions_list)
